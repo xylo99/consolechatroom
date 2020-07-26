@@ -22,7 +22,7 @@ __><type message><press enter>
 
 ```bash
 In the terminal in which ./demo.sh was ran, enter ctrl-c.
-
+```
 
 # Info
 
