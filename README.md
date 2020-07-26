@@ -6,7 +6,7 @@ Just run the script demo.sh
 
 Docker
 
-# Explination
+# Explanation
 
 Two windows will open and a prompt will appear. In total there will be three terminals: one that lauched the demo script, and two for the client sessions.\
 In one of the client terminals, simply type your message into the prompt, then the other client will receive that message. 
