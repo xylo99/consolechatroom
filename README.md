@@ -14,13 +14,13 @@ Once the other client is satisfied with that message, they will send a message b
 
 ## In new terminal window
 
-```bash
+```
 __><type message><press enter>
 ```
 
 ## To end the demo 
 
-```bash
+```
 In the terminal in which ./demo.sh was ran, enter ctrl-c.
 ```
 
