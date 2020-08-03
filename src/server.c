@@ -5,21 +5,21 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define MAX_CLIENTS   2
+#define MAX_CLIENTS   10
 #define EXIT_SEQ      "^["
 #define MAX_SIZE      255
 
 int main(int argc, const char * args[]) {
 
-    struct sockaddr_in cli_1_addr, cli_2_addr;
-    int srv_sock, cli_1_sock, cli_2_sock;
+    struct sockaddr_in cli_addr;
+    int srv_sock, sock_active, new_sock;
     int msg; // Recieve Message Status
 
-    char cli_1_buff[1024] = {0};
-    char cli_2_buff[1024] = {0};
+    fd_set comm_fd; // Working file descriptor is the socket that is awaiting a connection, and comm fd is the socket that holds client's data.
 
-    uint32_t cli_1_addr_len = sizeof(cli_1_addr);
-    uint32_t cli_2_addr_len = sizeof(cli_2_addr);
+    char cli_buff[1024] = {0};
+    int cli_sock[MAX_CLIENTS] = {0};
+    uint32_t cli_addr_len = sizeof(cli_addr);
 
     /* at this stage, there are no clients  */
     uint8_t no_clients = 1;
@@ -41,84 +41,82 @@ int main(int argc, const char * args[]) {
 
     char room_full_msg[MAX_SIZE] = "Room full! No other clients can join. Happy chatting! \n \0";
 
-    while(1) {
-        // If room is not full, then keep listening.
-        if(listen(srv_sock, MAX_CLIENTS) == 0 && room_full == 0) {
-            // accept first client and send welcome message
-            if (no_clients) {
+    int i, j, temp, msg_sendr_idx;
+    int max_sock_val; // store the maximum socket descritor value.
 
-                cli_1_sock = accept(srv_sock, (struct sockaddr *) &cli_1_addr, &cli_1_addr_len);
-                if(cli_1_sock > 0) {
-                    write(cli_1_sock, welcome_msg, sizeof(welcome_msg));
-                    read(cli_1_sock, cli_1_buff, sizeof(cli_1_buff));
-		    write(cli_1_sock, solo_client_msg, sizeof(solo_client_msg));
-		    no_clients = 0; // A client has officially joined the chatroom
-		    ctr_char_rcvd = 1;
-		    continue;
-                } else {
-		    //TODO: log.
-		    continue;
+
+    while(1) {
+        // Listen and queue up to the max number of clients.
+        if(listen(srv_sock, MAX_CLIENTS) == 0) {
+	    FD_ZERO(&comm_fd);
+	    FD_SET(srv_sock, &comm_fd);
+
+	    max_sock_val = srv_sock; // initialize maximum value.
+
+	    /* Add client sockets to the comm_fd set. */
+	    for(i = 0; i < MAX_CLIENTS; ++i) {
+		temp = cli_sock[i];
+		FD_SET(temp, &comm_fd);
+		if(temp > max_sock_val) {
+			max_sock_val = temp; // re-assign maximum value if needed.
+		}
+	    }
+
+	    /* Block on incomming connections */
+	    sock_active = select(max_sock_val+1, &comm_fd, NULL, NULL, NULL);
+
+	    if(sock_active) {
+		/* If server socket is set, then we have a new client. */
+	    	if(FD_ISSET(srv_sock, &comm_fd)) {
+			new_sock = accept(srv_sock, (struct sockaddr *) &cli_addr, &cli_addr_len);
+			if(new_sock > 0) {
+				write(new_sock, welcome_msg, sizeof(welcome_msg));
+                    		read(new_sock, cli_buff, sizeof(cli_buff));
+                    		for(i = 0; i < MAX_CLIENTS; ++i) {
+					if(cli_sock[i] == 0) {
+						cli_sock[i] = new_sock;
+						break;
+					}
+				}
+			} else {
+				//TODO: log.
+				continue;
+			}
+			/* Inform lone chatroom member that others have yet to join. */
+			if(sizeof(cli_sock)/sizeof(cli_sock[0]) == 1) {
+				write(new_sock, solo_client_msg, sizeof(solo_client_msg));
+				continue; // go back to listening.
+			}
+		} else {
+			/* Clients are exchanging msgs */
+			for(i = 0; i < MAX_CLIENTS; ++i) {
+				temp = cli_sock[i];
+				msg_sendr_idx = i; // store the index of the msg sender
+				if(FD_ISSET(temp, &comm_fd)) {
+					msg = read(temp, cli_buff, sizeof(cli_buff));
+					/* Handle disconnected sockets. */
+					if(msg == 0) {
+						close(temp);
+						cli_sock[i] = 0;
+						continue;
+					} else {
+						for(j = 0; j < MAX_CLIENTS; ++j) {
+							temp = cli_sock[j];
+							/* Broadcast message to everyone else in chat. */
+							if(j != msg_sendr_idx) {
+								write(temp, cli_buff, sizeof(cli_buff));
+							}
+						}
+					}
+				}
+			}
+			continue;
 		}
             } else {
-
-                cli_2_sock = accept(srv_sock, (struct sockaddr *) &cli_2_addr, &cli_2_addr_len);
-
-		        printf("accepting second cli");
-                if(cli_2_sock > 0) {
-
-                    send(cli_2_sock, welcome_msg, sizeof(welcome_msg), 0);
-                    read(cli_2_sock, cli_2_buff, sizeof(cli_2_buff));
-        		    write(cli_2_sock, room_full_msg, sizeof(room_full_msg));
-        		    room_full = 1;
-                } else {
-                    //TODO: log.
-                    continue;
-                }
-            }
-        } else {
-            //TODO: log.
-    	    if(!room_full) {
-                continue;
-    	    }
-        }
- 
-        bzero(cli_1_buff, sizeof(cli_1_buff));
-        msg = read(cli_1_sock, cli_1_buff, sizeof(cli_1_buff));
-        printf("sending %s\n", cli_1_buff);
-
-        if(msg > 0) {
-                if(ctr_char_rcvd == 1) {
-        			ctr_char_rcvd = 0;
-        			goto wait_on_recv;
-                }
-                write(cli_2_sock, cli_1_buff, sizeof(cli_1_buff));
-		        printf("Msg sent!\n");
-        } else {
-	       //TODO: log.
-	       continue;
-        }
-
-wait_on_recv:	
-	    bzero(cli_2_buff, sizeof(cli_2_buff));
-        msg = read(cli_2_sock, cli_2_buff, sizeof(cli_2_buff));
-	    printf("sending %s\n", cli_2_buff);
-
-        if(msg > 0) {
-
-            if(strcmp(cli_2_buff, EXIT_SEQ) == 0) {
-
-                close(cli_2_sock);
-                send(cli_1_sock, cli_exit_msg, sizeof(cli_exit_msg), 0);
-		room_full = 0;
-            } else {
-                write(cli_1_sock, cli_2_buff, sizeof(cli_2_buff));
-		printf("Msg sent!\n");
-            }
-         } else {
-           // TODO: log
-	   continue;
-         }
+	        //TODO: log
+		continue;
+	    }
+	}
     }
-
     return 0; // Program shouldn't get here!
 }
