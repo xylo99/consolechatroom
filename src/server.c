@@ -4,16 +4,23 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <stdio.h>
-
+/* Define global constants. */
 #define MAX_CLIENTS   10
 #define EXIT_SEQ      "^["
 #define MAX_SIZE      255
+/* Define debug. */
+#define LOG_ACTIVITY  1
+#define DEBUG_PRINTS(FMT, ...) do { \
+	if (LOG_ACTIVITY) { \
+		fprintf(stderr, "%s:%d:%s(): " FMT, __FILE__, \
+			__LINE__, __func__, __VA_ARGS__); } } while (0)
 
 int main(int argc, const char * args[]) {
 
     struct sockaddr_in cli_addr;
     int srv_sock, sock_active, new_sock;
-    int msg; // Recieve Message Status
+    int msg; // Recieve Message status.
+    int8_t cli_count = 0; // counter for clients.
 
     fd_set comm_fd; // Working file descriptor is the socket that is awaiting a connection, and comm fd is the socket that holds client's data.
 
@@ -47,76 +54,79 @@ int main(int argc, const char * args[]) {
 
     while(1) {
         // Listen and queue up to the max number of clients.
-        if(listen(srv_sock, MAX_CLIENTS) == 0) {
-	    FD_ZERO(&comm_fd);
-	    FD_SET(srv_sock, &comm_fd);
+        //if(listen(srv_sock, MAX_CLIENTS) == 0 || cli_count > 0) {
+	FD_ZERO(&comm_fd);
+	FD_SET(srv_sock, &comm_fd);
 
-	    max_sock_val = srv_sock; // initialize maximum value.
+	max_sock_val = srv_sock; // initialize maximum value.
 
-	    /* Add client sockets to the comm_fd set. */
-	    for(i = 0; i < MAX_CLIENTS; ++i) {
-		temp = cli_sock[i];
-		FD_SET(temp, &comm_fd);
-		if(temp > max_sock_val) {
-			max_sock_val = temp; // re-assign maximum value if needed.
-		}
-	    }
+	/* Add client sockets to the comm_fd set. */
+	for(i = 0; i < MAX_CLIENTS; ++i) {
+	temp = cli_sock[i];
+	FD_SET(temp, &comm_fd);
+	if(temp > max_sock_val) {
+		max_sock_val = temp; // re-assign maximum value if needed.
+	}
+	}
 
-	    /* Block on incomming connections */
-	    sock_active = select(max_sock_val+1, &comm_fd, NULL, NULL, NULL);
+	/* Block on incomming connections */
+	sock_active = select(max_sock_val+1, &comm_fd, NULL, NULL, NULL);
 
-	    if(sock_active) {
-		/* If server socket is set, then we have a new client. */
-	    	if(FD_ISSET(srv_sock, &comm_fd)) {
-			new_sock = accept(srv_sock, (struct sockaddr *) &cli_addr, &cli_addr_len);
-			if(new_sock > 0) {
-				write(new_sock, welcome_msg, sizeof(welcome_msg));
-                    		read(new_sock, cli_buff, sizeof(cli_buff));
-                    		for(i = 0; i < MAX_CLIENTS; ++i) {
-					if(cli_sock[i] == 0) {
-						cli_sock[i] = new_sock;
-						break;
-					}
+	if(sock_active) {
+	/* If server socket is set, then we have a new client. */
+	if(FD_ISSET(srv_sock, &comm_fd)) {
+		new_sock = accept(srv_sock, (struct sockaddr *) &cli_addr, &cli_addr_len);
+		if(new_sock > 0) {
+			++cli_count;
+			write(new_sock, welcome_msg, sizeof(welcome_msg));
+	    		read(new_sock, cli_buff, sizeof(cli_buff));
+	    		for(i = 0; i < MAX_CLIENTS; ++i) {
+				if(cli_sock[i] == 0) {
+					cli_sock[i] = new_sock;
+					break;
 				}
-			} else {
-				//TODO: log.
-				continue;
-			}
-			/* Inform lone chatroom member that others have yet to join. */
-			if(sizeof(cli_sock)/sizeof(cli_sock[0]) == 1) {
-				write(new_sock, solo_client_msg, sizeof(solo_client_msg));
-				continue; // go back to listening.
 			}
 		} else {
-			/* Clients are exchanging msgs */
-			for(i = 0; i < MAX_CLIENTS; ++i) {
-				temp = cli_sock[i];
-				msg_sendr_idx = i; // store the index of the msg sender
-				if(FD_ISSET(temp, &comm_fd)) {
-					msg = read(temp, cli_buff, sizeof(cli_buff));
-					/* Handle disconnected sockets. */
-					if(msg == 0) {
-						close(temp);
-						cli_sock[i] = 0;
-						continue;
-					} else {
-						for(j = 0; j < MAX_CLIENTS; ++j) {
-							temp = cli_sock[j];
-							/* Broadcast message to everyone else in chat. */
-							if(j != msg_sendr_idx) {
-								write(temp, cli_buff, sizeof(cli_buff));
-							}
+			//TODO: log.
+			continue;
+		}
+		DEBUG_PRINTS("%d\n", cli_count);
+		/* Inform lone chatroom member that others have yet to join. */
+		if(cli_count == 1) {
+			write(new_sock, solo_client_msg, sizeof(solo_client_msg));
+			continue; // go back to listening.
+		}
+	} else {
+		/* Clients are exchanging msgs */
+		for(i = 0; i < cli_count; ++i) {
+			temp = cli_sock[i];
+			msg_sendr_idx = i; // store the index of the msg sender
+			if(FD_ISSET(temp, &comm_fd)) {
+				msg = read(temp, cli_buff, sizeof(cli_buff));
+				/* Handle disconnected sockets. */
+				if(msg == 0) {
+					--cli_count;
+					close(temp);
+					cli_sock[i] = 0;
+					continue;
+				} else {
+					for(j = 0; j < cli_count; ++j) {
+						temp = cli_sock[j];
+						/* Broadcast message to everyone else in chat. */
+						if(j != msg_sendr_idx) {
+							write(temp, cli_buff, sizeof(cli_buff));
 						}
 					}
 				}
 			}
-			continue;
 		}
-            } else {
-	        //TODO: log
 		continue;
-	    }
 	}
+	} else {
+	//TODO: log
+	continue;
+	}
+	//}
     }
     return 0; // Program shouldn't get here!
 }
