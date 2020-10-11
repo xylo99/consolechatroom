@@ -6,7 +6,7 @@ Just run the script demo.sh
 
 Docker
 
-# Feature
+# Features
 
 Now with ncurses! Chat with 10 other peers!
 
