@@ -43,7 +43,7 @@ int main(int argc, const char * args[]) {
 	*/
 	char welcome_msg[MAX_SIZE] = "Welcome to the chatroom that lives inside of your Terminal!\n"
 	                          "Just type and press enter to send a message.\n"
-	                          "^[ exits the chatroom session. \n \0";
+	                          "CTRL-C exits the chatroom session. \n \0";
 
 	char solo_client_msg[MAX_SIZE] = "*** Waiting on a new client to join the chatroom... ***\n \0";
 
@@ -96,12 +96,6 @@ int main(int argc, const char * args[]) {
 					continue;
 				}
 				DEBUG_PRINTS("%d\n", cli_count);
-				/* Inform lone chatroom member that others have yet to join. */
-				if(cli_count == 1) {
-					write(new_sock, solo_client_msg, sizeof(solo_client_msg));
-				} else {
-                                        write(new_sock, room_full_msg, sizeof(room_full_msg));
-				}
 				continue;
 			} else {
 				/* Clients are exchanging msgs */
