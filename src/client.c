@@ -1,4 +1,4 @@
-# include "ui.h"
+# include "client.h"
 
 void draw_borders(WINDOW *screen) 
 {
