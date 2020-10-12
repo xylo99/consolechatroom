@@ -6,16 +6,20 @@ Just run the script demo.sh
 
 Docker
 
+# Features
+
+Now with ncurses! Chat with 10 other peers!
+
 # Explanation
 
-Two windows will open and a prompt will appear. In total there will be three terminals: one that lauched the demo script, and two for the client sessions.\
+Two windows will open and a prompt will appear. In total there will be three terminals: one that lauched the demo script, and two for the client sessions.
 In one of the client terminals, simply type your message into the prompt, then the other client will receive that message. 
 Once the other client is satisfied with that message, they will send a message back, to which you will receive.
 
 ## In new terminal window
 
 ```
-__><type message><press enter>
+<type message><press enter>
 ```
 
 ## To end the demo 
